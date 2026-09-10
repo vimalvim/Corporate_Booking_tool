@@ -1,19 +1,29 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { FileEdit, Clock3, CheckCircle2 } from 'lucide-react';
 import Topbar from '@/components/Topbar';
-import StatusPill from '@/components/StatusPill';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { formatCurrency, formatDate } from '@/lib/format';
+import { buildMonthlyTrend } from '@/lib/dashboard-trend';
 import type { Booking, Paginated, Approval } from '@/types';
+import SummaryCard from './_components/SummaryCard';
+import StatusDonut from './_components/Statusdonut';
+import ApprovalsPanel from './_components/Approvalspanel';
+import RecentTripsTable from './_components/Recenttripstable';
+import TrendChart from '@/components/Trendchart';
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>([]);
+  const [trend, setTrend] = useState<
+    Record<string, string | number>[]
+  >([]);
   const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
@@ -29,93 +39,83 @@ export default function DashboardPage() {
     })();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      // Larger window used for the trend chart and status donut only.
+      // Swap for a dedicated /bookings/stats endpoint once one exists server-side.
+      const res = await apiGet<Paginated<Booking>>('/bookings/', { page_size: 200 });
+      if (res.state && res.data) {
+        setAllBookings(res.data.results);
+        setTrend(buildMonthlyTrend(res.data.results));
+      }
+      setStatsLoading(false);
+    })();
+  }, [user]);
+
   const counts = {
     draft: bookings.filter((b) => b.status === 'DRAFT').length,
     pending: bookings.filter((b) => b.status === 'PENDING_APPROVAL').length,
     approved: bookings.filter((b) => b.status === 'APPROVED' || b.status === 'BOOKED').length,
   };
 
+  const canApprove = ['MANAGER', 'FINANCE', 'ADMIN'].includes(user?.role ?? '');
+
   return (
-    <>
-      <Topbar title={`Welcome, ${user?.first_name}`} subtitle="Here's what needs your attention today." />
-      <div className="p-6 space-y-6 max-w-6xl">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <SummaryCard label="Draft trips" value={counts.draft} accent="border-l-slate-400" />
-          <SummaryCard label="Pending approval" value={counts.pending} accent="border-l-brass" />
-          <SummaryCard label="Approved / booked" value={counts.approved} accent="border-l-teal" />
-        </div>
+    <div className="relative min-h-screen bg-gradient-to-b from-[#FBF9F4] via-[#F6F2E8] to-[#F1ECDF]">
+      <span className="pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full bg-brass opacity-[0.08] blur-[100px]" aria-hidden />
+      <span className="pointer-events-none absolute left-0 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full bg-teal opacity-[0.06] blur-[100px]" aria-hidden />
 
-        {['MANAGER', 'FINANCE', 'ADMIN'].includes(user?.role ?? '') && (
-          <section className="panel p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-display text-base">Awaiting your approval</h2>
-              <Link href="/approvals" className="text-sm text-brass hover:underline">View all</Link>
-            </div>
-            {pendingApprovals.length === 0 ? (
-              <p className="text-sm text-slate">Nothing waiting on you right now.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {pendingApprovals.map((a) => (
-                  <li key={a.id} className="py-2.5 flex items-center justify-between text-sm">
-                    <div>
-                      <span className="font-mono text-xs text-slate mr-2">{a.booking_reference}</span>
-                      {a.employee_name}
-                      {a.is_policy_violation && <span className="pill bg-brick-100 text-brick-600 ml-2">Out of policy</span>}
-                    </div>
-                    <span className="font-medium">{formatCurrency(a.estimated_cost)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
+      <div className="relative">
+        <Topbar title={`Welcome, ${user?.first_name}`} subtitle="Here's what needs your attention today." />
 
-        <section className="panel p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-display text-base">Recent trips</h2>
-            <Link href="/bookings" className="text-sm text-brass hover:underline">View all</Link>
+        <div className="space-y-6 p-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <SummaryCard label="Draft trips" value={counts.draft} icon={FileEdit} accent="slate" />
+            <SummaryCard label="Pending approval" value={counts.pending} icon={Clock3} accent="brass" />
+            <SummaryCard label="Approved / booked" value={counts.approved} icon={CheckCircle2} accent="teal" />
           </div>
-          {loading ? (
-            <p className="text-sm text-slate">Loading…</p>
-          ) : bookings.length === 0 ? (
-            <p className="text-sm text-slate">No bookings yet. <Link href="/bookings/new" className="text-brass hover:underline">Create one</Link>.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate border-b border-line">
-                  <th className="py-2 font-medium">Reference</th>
-                  <th className="py-2 font-medium">Destination</th>
-                  <th className="py-2 font-medium">Dates</th>
-                  <th className="py-2 font-medium">Cost</th>
-                  <th className="py-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {bookings.map((b) => (
-                  <tr key={b.id}>
-                    <td className="py-2.5">
-                      <Link href={`/bookings/${b.id}`} className="font-mono text-xs text-brass hover:underline">{b.reference}</Link>
-                    </td>
-                    <td className="py-2.5">{b.origin} → {b.destination}</td>
-                    <td className="py-2.5 text-slate">{formatDate(b.start_date)}</td>
-                    <td className="py-2.5">{formatCurrency(b.estimated_cost)}</td>
-                    <td className="py-2.5"><StatusPill status={b.status} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-      </div>
-    </>
-  );
-}
 
-function SummaryCard({ label, value, accent }: { label: string; value: number; accent: string }) {
-  return (
-    <div className={`panel border-l-4 ${accent} p-5`}>
-      <div className="text-3xl font-display">{value}</div>
-      <div className="text-sm text-slate mt-1">{label}</div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <TrendChart
+  data={trend}
+  xAxisKey="month"
+  title="Trips overview"
+  description="Booked vs cancelled trips, last 12 months"
+  totalLabel="total booked trips this period"
+  totalSeriesKey="booked"
+  loading={statsLoading}
+  series={[
+    {
+      key: 'booked',
+      label: 'Booked',
+      gradient: {
+        from: '#f59e0b',
+        middle: '#d97706',
+        to: '#0f766e',
+      },
+      fill: true,
+      strokeWidth: 2.5,
+    },
+    {
+      key: 'cancelled',
+      label: 'Cancelled',
+      color: '#94a3b8',
+      dashed: true,
+      strokeWidth: 1.5,
+    },
+  ]}
+/>
+            </div>
+            <StatusDonut bookings={allBookings} loading={statsLoading} />
+          </div>
+
+          {canApprove && <ApprovalsPanel approvals={pendingApprovals} />}
+
+          <RecentTripsTable bookings={bookings} loading={loading} />
+        </div>
+      </div>
     </div>
   );
 }
