@@ -1,4 +1,4 @@
-#!/home/vimal/Downloads/corporate-travel-booking-tool/corporate-travel-booking/backend/venv/bin/python3
+#!/home/sneka/Music/Corporate_Booking_tool/backend/venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /home/vimal/Downloads/corporate-travel-booking-tool/corporate-travel-booking/backend/venv
+set -gx VIRTUAL_ENV /home/sneka/Music/Corporate_Booking_tool/backend/venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH
